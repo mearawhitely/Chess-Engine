@@ -1,4 +1,5 @@
 import pygame
+import cell
 
 pygame.init()
 # size of the window
@@ -21,6 +22,7 @@ clock = pygame.time.Clock()
 
 screen.fill(grey)
 
+cells = []
 def draw_board():
     for row in range(num_cells):
         for col in range(num_cells):
@@ -34,6 +36,9 @@ def draw_board():
             pygame.draw.rect(screen, color, (x, y, cell_size, cell_size))
             
             pygame.display.flip()
+
+            new_cell = cell.Cell(row, col, color)
+            cells.append(new_cell)
 
 draw_board()
 
