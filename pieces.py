@@ -1,7 +1,7 @@
 class Piece:
     def __init__(self, row, col, color, image_url, type, rank, image, rect):
         self.row = row
-        self.row = col
+        self.col = col
         self.color = color
         self.image_url = image_url
         self.type = type
@@ -36,6 +36,12 @@ class Piece:
 
     def GetRect(self):
         return self.rect
+
+    def SetRow(self, row):
+        self.row = row
+
+    def SetCol(self, col):
+        self.col = col
 
     def GetPossibleMoves(self):
         if type == "Pawn":
