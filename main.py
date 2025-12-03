@@ -91,33 +91,81 @@ def populate_board():
 
 # ----------------- MOVE LOGIC -----------------
 def bot_move():
-    global black_pieces, white_pieces, turn
-    if game_over:
-        return
+    global black_pieces, white_pieces, cells, turn
 
-    all_moves = []
+    # --------------------------
+    # Helper: check if a square is attacked by white
+    # --------------------------
+    def square_is_dangerous(row, col):
+        for wp in white_pieces:
+            moves = wp.get_moves(cells)
+            for m in moves:
+                if m.row == row and m.col == col:
+                    return True
+        return False
+
+    # --------------------------
+    # Collect all legal black moves, with scoring
+    # --------------------------
+    scored_moves = []   # (score, piece, target_cell)
+
     for piece in black_pieces:
         moves = piece.get_moves(cells)
-        if moves:
-            all_moves.append((piece, moves))
+        if not moves:
+            continue
 
-    if not all_moves:
-        return
+        piece_is_hanging = square_is_dangerous(piece.GetRow(), piece.GetCol())
 
-    piece, moves = random.choice(all_moves)
-    target_cell = random.choice(moves)
+        for cell in moves:
+            score = 0
 
+            # 1. Prefer captures
+            if cell.GetOccupied() and cell.GetPiece().color == WHITE:
+                captured = cell.GetPiece()
+                score += captured.rank * 10      # big bonus for material gain
+
+            # 2. Avoid moving into danger
+            if square_is_dangerous(cell.row, cell.col):
+                score -= piece.rank * 8          # leaving piece in danger
+
+            # 3. Avoid moving a piece that is already threatened (unless capturing)
+            if piece_is_hanging:
+                if not (cell.GetOccupied() and cell.GetPiece().color == WHITE):
+                    score -= piece.rank * 4
+
+            scored_moves.append((score, piece, cell))
+
+    if not scored_moves:
+        return  # no legal moves (should be stalemate)
+
+    # --------------------------
+    # Choose the move with highest score
+    # --------------------------
+    scored_moves.sort(key=lambda x: x[0], reverse=True)
+    best_score = scored_moves[0][0]
+
+    # Collect all top-scoring moves (adds variation)
+    best_moves = [m for m in scored_moves if m[0] == best_score]
+
+    score, piece, target_cell = random.choice(best_moves)
+
+    # --------------------------
+    # Execute the chosen move
+    # --------------------------
     old_row, old_col = piece.GetRow(), piece.GetCol()
 
+    # Capture
     if target_cell.GetOccupied():
         target = target_cell.GetPiece()
         if target.color == WHITE:
             white_pieces.remove(target)
 
+    # Update piece
     piece.SetRow(target_cell.row)
     piece.SetCol(target_cell.col)
     piece.rect.topleft = (target_cell.col * CELL_SIZE, target_cell.row * CELL_SIZE)
 
+    # Update board cells
     for c in cells:
         if c.row == old_row and c.col == old_col:
             c.SetOccupied(False)
@@ -126,7 +174,9 @@ def bot_move():
     target_cell.SetOccupied(True)
     target_cell.SetPiece(piece)
 
+    # Turn back to white
     turn = 'white'
+
     check_king_death()
 
 def check_king_death():
