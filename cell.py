@@ -6,7 +6,9 @@ class Cell:
         self.rect = rect
         self.occupied = occupied
         self.piece = piece
+        self.highlight = False  
 
+    # ----------------- GETTERS -----------------
     def GetRow(self):
         return self.row
 
@@ -14,6 +16,9 @@ class Cell:
         return self.col
 
     def GetColor(self):
+        # Return green if highlighted, otherwise the normal color
+        if self.highlight:
+            return (0, 255, 0)  # Bright green for highlight
         return self.color
 
     def GetRect(self):
@@ -25,6 +30,10 @@ class Cell:
     def GetPiece(self):
         return self.piece
 
+    def GetHighlight(self):
+        return self.highlight  # NEW
+
+    # ----------------- SETTERS -----------------
     def SetColor(self, color):
         self.color = color
 
@@ -33,3 +42,6 @@ class Cell:
 
     def SetPiece(self, piece):
         self.piece = piece
+
+    def SetHighlight(self, value):
+        self.highlight = value  
