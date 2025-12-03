@@ -1,4 +1,5 @@
 import pygame
+import random
 from cell import Cell
 from pieces import *
 from pieces import Pawn, Bishop, Rook, Knight, Queen, King
@@ -11,17 +12,20 @@ WINDOW_WIDTH, WINDOW_HEIGHT = 1250, 800
 NUM_CELLS = 8
 CELL_SIZE = 800 // NUM_CELLS
 WHITE, BLACK, GREY = (255, 255, 255), (0, 0, 0), (128, 128, 128)
-global current_piece
+
 screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
 pygame.display.set_caption("Wacky Chess")
 clock = pygame.time.Clock()
 
-# ----------------- DATA -----------------
+# ----------------- GAME STATE -----------------
 cells = []
 white_pieces = []
 black_pieces = []
 current_piece = None
 turn = 'white'
+
+game_over = False
+winner_text = ""
 
 # ----------------- BOARD -----------------
 def draw_board_once():
@@ -45,20 +49,17 @@ def add_piece(piece_obj, row, col, target_list):
             c.SetPiece(piece_obj)
 
 def populate_board():
-    # --------- PAWNS ---------
     for col in range(8):
-        # White pawns (row 6)
         img = pygame.image.load('Chess-Engine/images/white_pawn.png').convert_alpha()
         rect = img.get_rect(topleft=(col*CELL_SIZE, 6*CELL_SIZE))
-        add_piece(Pawn(6, col, WHITE, 'Chess-Engine/images/white_pawn.png', img, rect), 6, col, white_pieces)
-        
-        # Black pawns (row 1)
+        add_piece(Pawn(6, col, WHITE, 'Chess-Engine/images/white_pawn.png', img, rect),
+                  6, col, white_pieces)
+
         img = pygame.image.load('Chess-Engine/images/black_pawn.png').convert_alpha()
         rect = img.get_rect(topleft=(col*CELL_SIZE, 1*CELL_SIZE))
-        add_piece(Pawn(1, col, BLACK, 'Chess-Engine/images/black_pawn.png', img, rect), 1, col, black_pieces)
+        add_piece(Pawn(1, col, BLACK, 'Chess-Engine/images/black_pawn.png', img, rect),
+                  1, col, black_pieces)
 
-    # --------- OTHER PIECES ---------
-    # Data: (Class, row, col, color, image_path)
     piece_positions = [
         (Rook, 7, 0, WHITE, 'Chess-Engine/images/white_rook.png'),
         (Rook, 7, 7, WHITE, 'Chess-Engine/images/white_rook.png'),
@@ -84,25 +85,108 @@ def populate_board():
 
     for cls, row, col, color, img_path in piece_positions:
         img = pygame.image.load(img_path).convert_alpha()
-        rect = img.get_rect(topleft=(col*CELL_SIZE, row*CELL_SIZE))
+        rect = img.get_rect(topleft=(col * CELL_SIZE, row * CELL_SIZE))
         target_list = white_pieces if color == WHITE else black_pieces
         add_piece(cls(row, col, color, img_path, img, rect), row, col, target_list)
 
 # ----------------- MOVE LOGIC -----------------
+def bot_move():
+    global black_pieces, white_pieces, turn
+    if game_over:
+        return
+
+    all_moves = []
+    for piece in black_pieces:
+        moves = piece.get_moves(cells)
+        if moves:
+            all_moves.append((piece, moves))
+
+    if not all_moves:
+        return
+
+    piece, moves = random.choice(all_moves)
+    target_cell = random.choice(moves)
+
+    old_row, old_col = piece.GetRow(), piece.GetCol()
+
+    if target_cell.GetOccupied():
+        target = target_cell.GetPiece()
+        if target.color == WHITE:
+            white_pieces.remove(target)
+
+    piece.SetRow(target_cell.row)
+    piece.SetCol(target_cell.col)
+    piece.rect.topleft = (target_cell.col * CELL_SIZE, target_cell.row * CELL_SIZE)
+
+    for c in cells:
+        if c.row == old_row and c.col == old_col:
+            c.SetOccupied(False)
+            c.SetPiece(None)
+
+    target_cell.SetOccupied(True)
+    target_cell.SetPiece(piece)
+
+    turn = 'white'
+    check_king_death()
+
+def check_king_death():
+    global game_over, winner_text
+
+    white_king_alive = any(p.type == "King" and p.color == WHITE for p in white_pieces)
+    black_king_alive = any(p.type == "King" and p.color == BLACK for p in black_pieces)
+
+    if not white_king_alive:
+        winner_text = "Black Wins! (White king died)"
+        game_over = True
+
+    if not black_king_alive:
+        winner_text = "White Wins! (Black king died)"
+        game_over = True
+
+def draw_game_over_screen():
+    overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
+    overlay.set_alpha(180)
+    overlay.fill((0, 0, 0))
+    screen.blit(overlay, (0, 0))
+
+    font_large = pygame.font.SysFont('calibri', 80)
+    font_small = pygame.font.SysFont('calibri', 40)
+
+    t1 = font_large.render("GAME OVER", True, (255, 0, 0))
+    t2 = font_small.render(winner_text, True, (255, 255, 255))
+    t3 = font_small.render("Press R to Restart", True, (200, 200, 200))
+
+    screen.blit(t1, (WINDOW_WIDTH//2 - t1.get_width()//2, 200))
+    screen.blit(t2, (WINDOW_WIDTH//2 - t2.get_width()//2, 320))
+    screen.blit(t3, (WINDOW_WIDTH//2 - t3.get_width()//2, 400))
+
+def restart_game():
+    global cells, white_pieces, black_pieces, current_piece, turn, score
+    global game_over, winner_text
+
+    cells = []
+    white_pieces = []
+    black_pieces = []
+    current_piece = None
+    turn = 'white'
+    score = 0
+    game_over = False
+    winner_text = ""
+
+    draw_board_once()
+    populate_board()
+
 def highlight_valid_moves(piece):
-    """Highlight cells where the selected piece can legally move."""
-    # First, clear all highlights
     for cell in cells:
         cell.SetHighlight(False)
 
     if piece is None:
         return
 
-    # Get moves from the piece itself
     moves = piece.get_moves(cells)
-
     for cell in moves:
         cell.SetHighlight(True)
+
 def get_cell_at_pos(pos):
     for cell in cells:
         if cell.GetRect().collidepoint(pos):
@@ -114,7 +198,7 @@ name = ''
 score = 0
 active = False
 font = pygame.font.SysFont('calibri', 40)
-text_box = pygame.Rect(920,6,300,40)
+text_box = pygame.Rect(920, 6, 300, 40)
 
 # ----------------- INITIALIZE -----------------
 draw_board_once()
@@ -123,69 +207,94 @@ populate_board()
 # ----------------- MAIN LOOP -----------------
 running = True
 while running:
+
     for event in pygame.event.get():
+
         if event.type == pygame.QUIT:
             Game(name, score).StoreGame()
             running = False
 
-        # --------------- MOUSE ----------------
+        # BLOCK INPUT IF GAME OVER (only allow restart)
+        if game_over:
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
+                restart_game()
+            continue
+
+        # ----------------- MOUSE -----------------
         if event.type == pygame.MOUSEBUTTONDOWN:
             mouse_pos = event.pos
             active = text_box.collidepoint(mouse_pos)
             clicked_cell = get_cell_at_pos(mouse_pos)
+
             if clicked_cell is None:
                 continue
 
-            # Selecting piece
-            
             if current_piece is None:
                 if clicked_cell.GetOccupied():
-                    if (turn=='white' and clicked_cell.GetPiece().color==WHITE) or (turn=='black' and clicked_cell.GetPiece().color==BLACK):
-                        current_piece = clicked_cell.GetPiece()
+                    piece = clicked_cell.GetPiece()
+                    if (turn == 'white' and piece.color == WHITE) or \
+                       (turn == 'black' and piece.color == BLACK):
+                        current_piece = piece
                         highlight_valid_moves(current_piece)
+
             else:
-                # Move piece if cell is highlighted
                 if clicked_cell.GetHighlight():
                     old_row, old_col = current_piece.GetRow(), current_piece.GetCol()
-                    # Capture
+
                     if clicked_cell.GetOccupied():
                         target = clicked_cell.GetPiece()
-                        if target.color==WHITE:
+                        if target.color == WHITE:
                             white_pieces.remove(target)
                         else:
                             black_pieces.remove(target)
-                    # Update piece
+
                     current_piece.SetRow(clicked_cell.row)
                     current_piece.SetCol(clicked_cell.col)
-                    current_piece.rect.topleft = (clicked_cell.col*CELL_SIZE, clicked_cell.row*CELL_SIZE)
-                    # Update cells
+                    current_piece.rect.topleft = (clicked_cell.col * CELL_SIZE,
+                                                  clicked_cell.row * CELL_SIZE)
+
                     for c in cells:
-                        if c.row==old_row and c.col==old_col:
+                        if c.row == old_row and c.col == old_col:
                             c.SetOccupied(False)
                             c.SetPiece(None)
+
                     clicked_cell.SetOccupied(True)
                     clicked_cell.SetPiece(current_piece)
-                    # Switch turn
-                    turn = 'black' if turn=='white' else 'white'
+
+                    turn = 'black' if turn == 'white' else 'white'
+                    check_king_death()
+
                 current_piece = None
                 for c in cells:
                     c.SetHighlight(False)
 
-        # --------------- KEYBOARD ----------------
-        if event.type == pygame.KEYDOWN and active:
-            if event.key == pygame.K_BACKSPACE:
-                name = name[:-1]
-            else:
-                name += event.unicode
+        # ----------------- KEYBOARD -----------------
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_r:
+                restart_game()
+
+            if active:
+                if event.key == pygame.K_BACKSPACE:
+                    name = name[:-1]
+                else:
+                    name += event.unicode
+
+    # ----------------- BOT MOVE -----------------
+    if turn == 'black' and not game_over:
+        bot_move()
 
     # ----------------- DRAW -----------------
     screen.fill(GREY)
     draw_board()
     for piece in white_pieces + black_pieces:
         screen.blit(piece.image, piece.rect)
+
     pygame.draw.rect(screen, WHITE if active else BLACK, text_box, 4)
-    screen.blit(font.render(name, True, BLACK), (text_box.x+5, text_box.y+5))
-    screen.blit(font.render("Name:", True, BLACK), (text_box.x-110, text_box.y))
+    screen.blit(font.render(name, True, BLACK), (text_box.x + 5, text_box.y + 5))
+    screen.blit(font.render("Name:", True, BLACK), (text_box.x - 110, text_box.y))
+
+    if game_over:
+        draw_game_over_screen()
 
     pygame.display.update()
     clock.tick(50)
